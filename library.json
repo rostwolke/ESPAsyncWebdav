@@ -1,0 +1,17 @@
+{
+  "name":"ESPAsyncWebdav",
+  "description":"Asynchronous Webdav Plugin for ESPAsyncWebServer",
+  "keywords":"async,tcp,server,webdav",
+  "authors":
+  {
+    "name": "Dennis Parsch",
+    "maintainer": true
+  },
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/rostwolke/ESPAsyncWebdav"
+  },
+  "frameworks": "arduino",
+  "platforms":"espressif"
+}
