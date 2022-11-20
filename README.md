@@ -1,10 +1,9 @@
 # ESPAsyncWebdav
-This project is a Webdav Plugin for ESPAsyncWebServer. So far it has only been tested with an ESP8266 but should 
-also work for the ESP32.
+This project is a Webdav Plugin for ESPAsyncWebServer. Works with ESP8266 and ESP32.
 
 ## Important notice
 
-To make this plugin work with ESPAsyncWebServer you currently (as of 2020-01-22) have to either patch me-no-dev's original code or use [my fork](https://github.com/rostwolke/ESPAsyncWebServer). To see which changes have to be done, see the [pull request](https://github.com/me-no-dev/ESPAsyncWebServer/pull/676).
+To make this plugin work with ESPAsyncWebServer you currently (as of 2022-11-20) have to either patch me-no-dev's original code or use [my fork](https://github.com/rostwolke/ESPAsyncWebServer). To see which changes have to be done, see the [pull request](https://github.com/me-no-dev/ESPAsyncWebServer/pull/676).
 
 ## How to use
 - Download the project archive and unpack it in your Arduino libraries folder
