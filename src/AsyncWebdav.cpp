@@ -1,9 +1,19 @@
 #include <Arduino.h>
 #include <LittleFS.h>
-#include <ESPAsyncTCP.h>
+
 #include <ESPAsyncWebServer.h>
 #include <DateTime.h>
-#include <Hash.h>
+
+#ifdef ESP32
+    #include <AsyncTCP.h>
+    #include "ESP32SHA1.h"
+#elif defined(ESP8266)
+    #include <ESPAsyncTCP.h>
+    #include <Hash.h>
+#else
+    #error Platform not supported
+#endif
+
 #include "AsyncWebdav.h"
 
 AsyncWebdav::AsyncWebdav(const String& url){
@@ -147,13 +157,24 @@ void AsyncWebdav::handlePropfind(const String& path, DavResourceType resource, A
     response->print("<d:multistatus xmlns:d=\"DAV:\">");
     sendPropResponse(response, false, &baseFile);
     if(resource == DAV_RESOURCE_DIR && depth == DAV_DEPTH_CHILD){
-        Dir dir = LittleFS.openDir(path);
-        File childFile;
-        while(dir.next()){
-            childFile = dir.openFile("r");
-            sendPropResponse(response, true, &childFile);
-            childFile.close();
-        }
+        #ifdef ESP32
+            File dir = LittleFS.open(path);
+            File childFile = dir.openNextFile();
+            while(childFile){
+                sendPropResponse(response, true, &childFile);
+                childFile.close();
+                childFile = dir.openNextFile();
+            }
+            dir.close();
+        #else
+            Dir dir = LittleFS.openDir(path);
+            File childFile;
+            while(dir.next()){
+                childFile = dir.openFile("r");
+                sendPropResponse(response, true, &childFile);
+                childFile.close();
+            }
+        #endif
     }
     response->print("</d:multistatus>");
 
@@ -322,7 +343,11 @@ String AsyncWebdav::urlToUri(String url){
 }
 
 void AsyncWebdav::sendPropResponse(AsyncResponseStream *response, boolean recursing, File *curFile){
-    String fullPath = curFile->fullName();
+    #ifdef ESP32
+        String fullPath = curFile->name();
+    #else
+        String fullPath = curFile->fullName();
+    #endif
     if(fullPath.substring(0, 1) != "/"){
         fullPath = String("/") + fullPath;
     }
@@ -338,8 +363,17 @@ void AsyncWebdav::sendPropResponse(AsyncResponseStream *response, boolean recurs
     String fileTimeStamp = dt.format("%a, %d %b %Y %H:%M:%S GMT");
 
     // load fs info
-    FSInfo fsInfo;
-    LittleFS.info(fsInfo);
+
+    
+    #ifdef ESP32
+        size_t usedBytes = LittleFS.usedBytes();
+        size_t availBytes = LittleFS.totalBytes() - LittleFS.usedBytes();
+    #else
+        FSInfo fsInfo;
+        LittleFS.info(fsInfo);
+        size_t usedBytes = fsInfo.usedBytes;
+        size_t availBytes = fsInfo.totalBytes - fsInfo.usedBytes;
+    #endif
 
     // send response
     response->print("<d:response>");
@@ -351,8 +385,8 @@ void AsyncWebdav::sendPropResponse(AsyncResponseStream *response, boolean recurs
     response->printf("<d:getlastmodified>%s</d:getlastmodified>", fileTimeStamp.c_str());
     
     // quota
-    response->printf("<d:quota-used-bytes>%d</d:quota-used-bytes>", fsInfo.usedBytes);
-    response->printf("<d:quota-available-bytes>%d</d:quota-available-bytes>", fsInfo.totalBytes - fsInfo.usedBytes);
+    response->printf("<d:quota-used-bytes>%d</d:quota-used-bytes>", usedBytes);
+    response->printf("<d:quota-available-bytes>%d</d:quota-available-bytes>", availBytes);
 
     if(curFile->isDirectory()) {
         // resource type
