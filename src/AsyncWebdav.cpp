@@ -1,6 +1,4 @@
 #include <Arduino.h>
-#include <LittleFS.h>
-
 #include <ESPAsyncWebServer.h>
 #include <DateTime.h>
 
@@ -16,7 +14,7 @@
 
 #include "AsyncWebdav.h"
 
-AsyncWebdav::AsyncWebdav(const String& url){
+AsyncWebdav::AsyncWebdav(const String& url, fs::FS &fs) : _fs(fs) {
     this->_url = url;
 }
 
@@ -59,7 +57,7 @@ void AsyncWebdav::handleRequest(AsyncWebServerRequest *request){
 
     // check resource type on local storage
     DavResourceType resource = DAV_RESOURCE_NONE;
-    File baseFile = LittleFS.open(path, "r");
+    File baseFile = _fs.open(path, "r");
     if(baseFile){
         resource = baseFile.isDirectory() ? DAV_RESOURCE_DIR : DAV_RESOURCE_FILE;
         baseFile.close();
@@ -76,10 +74,10 @@ void AsyncWebdav::handleRequest(AsyncWebServerRequest *request){
         return handleHead(resource, request);
     }
     if(request->method() == HTTP_PUT){
-        if(LittleFS.exists(path)){
+        if(_fs.exists(path)){
             return request->send(200);
         }else{
-            File f = LittleFS.open(path, "a");
+            File f = _fs.open(path, "a");
             if(f){
                 f.close();
                 return request->send(201);
@@ -119,7 +117,7 @@ void AsyncWebdav::handleBody(AsyncWebServerRequest *request, unsigned char *data
 
     // check resource type on local storage
     DavResourceType resource = DAV_RESOURCE_NONE;
-    File baseFile = LittleFS.open(path, "r");
+    File baseFile = _fs.open(path, "r");
     if(baseFile){
         resource = baseFile.isDirectory() ? DAV_RESOURCE_DIR : DAV_RESOURCE_FILE;
         baseFile.close();
@@ -149,7 +147,7 @@ void AsyncWebdav::handlePropfind(const String& path, DavResourceType resource, A
     }
 
     // prepare response
-    File baseFile = LittleFS.open(path, "r");
+    File baseFile = _fs.open(path, "r");
     AsyncResponseStream *response = request->beginResponseStream("application/xml");
     response->setCode(207);
 
@@ -158,7 +156,7 @@ void AsyncWebdav::handlePropfind(const String& path, DavResourceType resource, A
     sendPropResponse(response, false, &baseFile);
     if(resource == DAV_RESOURCE_DIR && depth == DAV_DEPTH_CHILD){
         #ifdef ESP32
-            File dir = LittleFS.open(path);
+            File dir = _fs.open(path);
             File childFile = dir.openNextFile();
             while(childFile){
                 sendPropResponse(response, true, &childFile);
@@ -167,7 +165,7 @@ void AsyncWebdav::handlePropfind(const String& path, DavResourceType resource, A
             }
             dir.close();
         #else
-            Dir dir = LittleFS.openDir(path);
+            Dir dir = _fs.openDir(path);
             File childFile;
             while(dir.next()){
                 childFile = dir.openFile("r");
@@ -187,7 +185,7 @@ void AsyncWebdav::handleGet(const String& path, DavResourceType resource, AsyncW
         return handleNotFound(request);
     }
 
-    AsyncWebServerResponse *response = request->beginResponse(LittleFS, path);
+    AsyncWebServerResponse *response = request->beginResponse(_fs, path);
     response->addHeader("Allow", "PROPFIND,OPTIONS,DELETE,COPY,MOVE,HEAD,POST,PUT,GET");
     request->send(response);
 }
@@ -199,9 +197,9 @@ void AsyncWebdav::handlePut(const String& path, DavResourceType resource, AsyncW
 
     File file;
     if(!index){
-        file = LittleFS.open(path, "w");
+        file = _fs.open(path, "w");
     }else{
-        file = LittleFS.open(path, "a");
+        file = _fs.open(path, "a");
     }
     file.write(data, len);
     file.close();
@@ -253,7 +251,7 @@ void AsyncWebdav::handleMkcol(const String& path, DavResourceType resource, Asyn
         status = 405;
     }else{
         // create dir and send response
-        if(LittleFS.mkdir(path)){
+        if(_fs.mkdir(path)){
             status = 201;
         }else{
             status = 405;
@@ -273,7 +271,7 @@ void AsyncWebdav::handleMove(const String& path, DavResourceType resource, Async
     }
 
     AsyncWebServerResponse *response;
-    if(LittleFS.rename(path, urlToUri(destinationHeader->value()))){
+    if(_fs.rename(path, urlToUri(destinationHeader->value()))){
         response = request->beginResponse(201);
         response->addHeader("Allow", "OPTIONS,MKCOL,LOCK,POST,PUT");
     }else{
@@ -292,9 +290,9 @@ void AsyncWebdav::handleDelete(const String& path, DavResourceType resource, Asy
     // delete file or dir
     bool result;
     if(resource == DAV_RESOURCE_FILE){
-        result = LittleFS.remove(path);
+        result = _fs.remove(path);
     }else{
-        result = LittleFS.rmdir(path);
+        result = _fs.rmdir(path);
     }
 
     // check for error
@@ -362,19 +360,6 @@ void AsyncWebdav::sendPropResponse(AsyncResponseStream *response, boolean recurs
     DateTimeClass dt(lastWrite);
     String fileTimeStamp = dt.format("%a, %d %b %Y %H:%M:%S GMT");
 
-    // load fs info
-
-    
-    #ifdef ESP32
-        size_t usedBytes = LittleFS.usedBytes();
-        size_t availBytes = LittleFS.totalBytes() - LittleFS.usedBytes();
-    #else
-        FSInfo fsInfo;
-        LittleFS.info(fsInfo);
-        size_t usedBytes = fsInfo.usedBytes;
-        size_t availBytes = fsInfo.totalBytes - fsInfo.usedBytes;
-    #endif
-
     // send response
     response->print("<d:response>");
     response->printf("<d:href>%s</d:href>", fullPath.c_str());
@@ -383,10 +368,6 @@ void AsyncWebdav::sendPropResponse(AsyncResponseStream *response, boolean recurs
     
     // last modified
     response->printf("<d:getlastmodified>%s</d:getlastmodified>", fileTimeStamp.c_str());
-    
-    // quota
-    response->printf("<d:quota-used-bytes>%d</d:quota-used-bytes>", usedBytes);
-    response->printf("<d:quota-available-bytes>%d</d:quota-available-bytes>", availBytes);
 
     if(curFile->isDirectory()) {
         // resource type

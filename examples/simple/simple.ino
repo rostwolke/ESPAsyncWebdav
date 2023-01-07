@@ -1,5 +1,8 @@
+#ifdef ESP32
+#include <WiFi.h>
+#else
 #include <ESP8266WiFi.h>
-#include <ESPAsyncTCP.h>
+#endif
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
 #include <AsyncWebdav.h>
@@ -8,7 +11,7 @@ const char* ssid = "ssid";
 const char* password = "pass";
 
 AsyncWebServer server(80);
-AsyncWebdav dav("/dav");
+AsyncWebdav dav("/dav", LittleFS);
 
 
 void setup(void){
