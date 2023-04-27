@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
-#include <DateTime.h>
+// #include <DateTime.h>
 
 #ifdef ESP32
     #include <AsyncTCP.h>
@@ -359,8 +359,9 @@ void AsyncWebdav::sendPropResponse(AsyncResponseStream *response, boolean recurs
 
     // get file modified time
     time_t lastWrite = curFile->getLastWrite();
-    DateTimeClass dt(lastWrite);
-    String fileTimeStamp = dt.format("%a, %d %b %Y %H:%M:%S GMT");
+    char fileTimeStamp[64];
+    struct tm* t = localtime(&lastWrite);
+    strftime(fileTimeStamp, sizeof(fileTimeStamp), "%a, %d %b %Y %H:%M:%S GMT", t);
 
     // send response
     response->print("<d:response>");
@@ -369,7 +370,7 @@ void AsyncWebdav::sendPropResponse(AsyncResponseStream *response, boolean recurs
     response->print("<d:prop>");
     
     // last modified
-    response->printf("<d:getlastmodified>%s</d:getlastmodified>", fileTimeStamp.c_str());
+    response->printf("<d:getlastmodified>%s</d:getlastmodified>", fileTimeStamp);
 
     // quota
     size_t usedBytes = 0;
