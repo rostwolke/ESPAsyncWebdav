@@ -12,6 +12,12 @@
     "type": "git",
     "url": "https://github.com/rostwolke/ESPAsyncWebdav"
   },
+  "dependencies": [
+    {
+      "name":"ESP Async WebServer",
+      "version":"https://github.com/rostwolke/ESPAsyncWebServer"
+    }
+  ],  
   "frameworks": "arduino",
   "platforms":"espressif"
 }
