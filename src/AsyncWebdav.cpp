@@ -14,10 +14,12 @@
 
 #include "AsyncWebdav.h"
 
-AsyncWebdav::AsyncWebdav(const String& url, fs::FS &fs) : _fs(fs) {
-    this->_url = url;
+AsyncWebdav::AsyncWebdav(const String& url, fs::FS &fs, quota_function totalBytes, quota_function usedBytes)
+: _url(url)
+, _fs(fs)
+, _totalBytes(totalBytes)
+, _usedBytes(usedBytes) {
 }
-
 
 bool AsyncWebdav::canHandle(AsyncWebServerRequest *request){
     if(request->url().startsWith(this->_url)){
@@ -368,6 +370,17 @@ void AsyncWebdav::sendPropResponse(AsyncResponseStream *response, boolean recurs
     
     // last modified
     response->printf("<d:getlastmodified>%s</d:getlastmodified>", fileTimeStamp.c_str());
+
+    // quota
+    size_t usedBytes = 0;
+    size_t availBytes = 0;
+    
+    if (_totalBytes && _usedBytes) {
+        usedBytes = _usedBytes();
+        availBytes = _totalBytes() - usedBytes;
+    }
+    response->printf("<d:quota-used-bytes>%d</d:quota-used-bytes>", usedBytes);
+    response->printf("<d:quota-available-bytes>%d</d:quota-available-bytes>", availBytes);
 
     if(curFile->isDirectory()) {
         // resource type
