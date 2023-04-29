@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <FS.h>
-
+#include <ESPAsyncWebServer.h>
 
 enum DavResourceType { DAV_RESOURCE_NONE, DAV_RESOURCE_FILE, DAV_RESOURCE_DIR };
 enum DavDepthType { DAV_DEPTH_NONE, DAV_DEPTH_CHILD, DAV_DEPTH_ALL };
@@ -8,7 +8,10 @@ enum DavDepthType { DAV_DEPTH_NONE, DAV_DEPTH_CHILD, DAV_DEPTH_ALL };
 
 class AsyncWebdav: public AsyncWebHandler {
     public:
-        AsyncWebdav(const String& url, fs::FS &fs);
+        typedef size_t (*quota_function)(void);
+
+    public:
+        AsyncWebdav(const String& url, fs::FS &fs, quota_function totalBytes = nullptr, quota_function usedBytes = nullptr);
 
         virtual bool canHandle(AsyncWebServerRequest *request) override final;
         virtual void handleRequest(AsyncWebServerRequest *request) override final;
@@ -20,6 +23,8 @@ class AsyncWebdav: public AsyncWebHandler {
     private:
         String _url;
         fs::FS _fs;
+        quota_function _totalBytes;
+        quota_function _usedBytes;
         void handlePropfind(const String& path, DavResourceType resource, AsyncWebServerRequest * request);
         void handleGet(const String& path, DavResourceType resource, AsyncWebServerRequest * request);
         void handlePut(const String& path, DavResourceType resource, AsyncWebServerRequest * request, unsigned char *data, size_t len, size_t index, size_t total);

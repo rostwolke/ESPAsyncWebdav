@@ -1,17 +1,35 @@
-#ifdef ESP32
+#if defined(ESP32)
 #include <WiFi.h>
-#else
+#elif defined(ESP8266)
 #include <ESP8266WiFi.h>
+#else
+#error Platform not supported
 #endif
+
 #include <ESPAsyncWebServer.h>
-#include <LittleFS.h>
 #include <AsyncWebdav.h>
+
+// LittleFS
+#include <LittleFS.h>
+#define FILESYSTEM LittleFS
+
+// SPIFFS
+// #include <SPIFFS.h>
+// #define FILESYSTEM SPIFFS
+
+// FFat
+// #include <FFat.h>
+// #define FILESYSTEM FFat
 
 const char* ssid = "ssid";
 const char* password = "pass";
 
 AsyncWebServer server(80);
-AsyncWebdav dav("/dav", LittleFS);
+
+size_t totalBytes() { return FILESYSTEM.totalBytes(); }
+size_t usedBytes() { return FILESYSTEM.usedBytes(); }
+
+AsyncWebdav dav("/dav", FILESYSTEM, totalBytes, usedBytes);
 
 
 void setup(void){
@@ -31,14 +49,14 @@ void setup(void){
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 
-  // init spiffs
-  LittleFS.begin();
+  // init filesystem
+  FILESYSTEM.begin();
 
-  // add websocket handler
+  // add WebDAV handler
   server.addHandler(&dav);
 
   // start webserver
-  server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
+  server.serveStatic("/", FILESYSTEM, "/www/").setDefaultFile("index.html");
   server.begin();
 }
 

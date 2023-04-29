@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
-#include <DateTime.h>
+// #include <DateTime.h>
 
 #ifdef ESP32
     #include <AsyncTCP.h>
@@ -14,10 +14,12 @@
 
 #include "AsyncWebdav.h"
 
-AsyncWebdav::AsyncWebdav(const String& url, fs::FS &fs) : _fs(fs) {
-    this->_url = url;
+AsyncWebdav::AsyncWebdav(const String& url, fs::FS &fs, quota_function totalBytes, quota_function usedBytes)
+: _url(url)
+, _fs(fs)
+, _totalBytes(totalBytes)
+, _usedBytes(usedBytes) {
 }
-
 
 bool AsyncWebdav::canHandle(AsyncWebServerRequest *request){
     if(request->url().startsWith(this->_url)){
@@ -357,8 +359,9 @@ void AsyncWebdav::sendPropResponse(AsyncResponseStream *response, boolean recurs
 
     // get file modified time
     time_t lastWrite = curFile->getLastWrite();
-    DateTimeClass dt(lastWrite);
-    String fileTimeStamp = dt.format("%a, %d %b %Y %H:%M:%S GMT");
+    char fileTimeStamp[64];
+    struct tm* t = localtime(&lastWrite);
+    strftime(fileTimeStamp, sizeof(fileTimeStamp), "%a, %d %b %Y %H:%M:%S GMT", t);
 
     // send response
     response->print("<d:response>");
@@ -367,7 +370,18 @@ void AsyncWebdav::sendPropResponse(AsyncResponseStream *response, boolean recurs
     response->print("<d:prop>");
     
     // last modified
-    response->printf("<d:getlastmodified>%s</d:getlastmodified>", fileTimeStamp.c_str());
+    response->printf("<d:getlastmodified>%s</d:getlastmodified>", fileTimeStamp);
+
+    // quota
+    size_t usedBytes = 0;
+    size_t availBytes = 0;
+    
+    if (_totalBytes && _usedBytes) {
+        usedBytes = _usedBytes();
+        availBytes = _totalBytes() - usedBytes;
+    }
+    response->printf("<d:quota-used-bytes>%d</d:quota-used-bytes>", usedBytes);
+    response->printf("<d:quota-available-bytes>%d</d:quota-available-bytes>", availBytes);
 
     if(curFile->isDirectory()) {
         // resource type
